@@ -2,179 +2,76 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tarik Tambang Piksel - P2P</title>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <title>Dot Dodger - Leaderboard</title>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #1e1e1e;
-            color: white;
-            text-align: center;
-            padding: 20px;
-        }
-        #game-board {
-            width: 80%;
-            height: 50px;
-            background-color: #333;
-            margin: 50px auto;
-            border-radius: 25px;
-            position: relative;
-            display: none;
-            overflow: hidden;
-            border: 2px solid #555;
-        }
-        #rope {
-            width: 50px;
-            height: 50px;
-            background-color: #ff4757;
-            border-radius: 50%;
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            transition: left 0.1s ease;
-        }
-        .btn {
-            background-color: #2ed573;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            border-radius: 5px;
-            margin: 5px;
-        }
-        .btn:active { background-color: #1e90ff; }
-        .btn:disabled { background-color: #555; cursor: not-allowed; }
-        
-        #pull-btn {
-            font-size: 24px;
-            padding: 20px 40px;
-            border-radius: 10px;
-            display: none;
-        }
-        .menu {
-            background: #2f3542;
-            padding: 20px;
-            border-radius: 10px;
-            display: inline-block;
-            margin-top: 20px;
-        }
-        input { padding: 10px; border-radius: 5px; border: none; margin: 5px; }
+        body { background: #111; color: white; text-align: center; font-family: sans-serif; }
+        canvas { background: #000; display: block; margin: 20px auto; border: 2px solid #333; }
+        #ui { margin-top: 10px; }
     </style>
 </head>
 <body>
-
-    <h1>🔗 Tarik Tambang Piksel</h1>
-    <p>Game Multiplayer P2P Tanpa Server!</p>
-
-    <div class="menu" id="menu-section">
-        <h3>Menu Utama</h3>
-        <p>ID Kamu: <strong id="my-id">Memuat...</strong></p>
-        
-        <hr style="border-color: #555;">
-        
-        <h4>Gabung ke Teman</h4>
-        <input type="text" id="friend-id" placeholder="Masukkan ID Teman">
-        <button class="btn" onclick="joinGame()">Gabung & Main</button>
-        <p id="status" style="color: #ffa502;"></p>
+    <h1>Dot Dodger</h1>
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    <div id="ui">
+        <p>Skor: <span id="score">0</span></p>
+        <button onclick="startGame()">Mulai Game</button>
     </div>
-
-    <div id="game-board">
-        <div id="rope"></div>
-    </div>
-    
-    <button class="btn" id="pull-btn" onclick="pull()">TARIK!!</button>
+    <h2>Leaderboard</h2>
+    <ol id="leaderboard"></ol>
 
     <script>
-        // Inisialisasi PeerJS
-        const peer = new Peer();
-        let connection;
-        let isHost = false;
-        let position = 50; // Posisi tengah (50%)
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        let score = 0, gameActive = false, player = {x: 190, y: 350}, enemies = [];
 
-        const myIdDisplay = document.getElementById('my-id');
-        const statusDisplay = document.getElementById('status');
-        const rope = document.getElementById('rope');
-        const gameBoard = document.getElementById('game-board');
-        const pullBtn = document.getElementById('pull-btn');
-        const menuSection = document.getElementById('menu-section');
+        function startGame() {
+            score = 0; enemies = []; gameActive = true;
+            requestAnimationFrame(update);
+        }
 
-        // Saat Peer berhasil dibuat
-        peer.on('open', (id) => {
-            myIdDisplay.textContent = id;
-            isHost = true; // Secara default, kamu adalah host untuk dirimu sendiri
-        });
-
-        // Jika ada teman yang terhubung ke ID kita (Sebagai Host)
-        peer.on('connection', (conn) => {
-            connection = conn;
-            isHost = true;
-            setupGame();
-        });
-
-        // Fungsi untuk gabung ke ID teman (Sebagai Guest)
-        function joinGame() {
-            const friendId = document.getElementById('friend-id').value;
-            if (!friendId) return;
+        function update() {
+            if (!gameActive) return;
+            score++;
+            document.getElementById("score").innerText = Math.floor(score/10);
             
-            statusDisplay.textContent = "Menghubungkan...";
-            connection = peer.connect(friendId);
-            isHost = false;
-            
-            connection.on('open', () => {
-                setupGame();
+            // Logika Musuh
+            if (Math.random() < 0.05) enemies.push({x: Math.random()*380, y: 0});
+            enemies.forEach(e => { e.y += 5; });
+
+            // Deteksi Tabrakan
+            enemies.forEach(e => {
+                if (e.y > 350 && Math.abs(e.x - player.x) < 30) gameOver();
             });
-        }
 
-        // Setup UI saat koneksi berhasil
-        function setupGame() {
-            menuSection.style.display = 'none';
-            gameBoard.style.display = 'block';
-            pullBtn.style.display = 'inline-block';
+            // Draw
+            ctx.clearRect(0,0,400,400);
+            ctx.fillStyle = "blue"; ctx.fillRect(player.x, player.y, 30, 30);
+            ctx.fillStyle = "red";
+            enemies.forEach(e => ctx.fillRect(e.x, e.y, 20, 20));
             
-            // Menerima data tarikan dari lawan
-            connection.on('data', (data) => {
-                if (data === 'pull') {
-                    // Jika lawan menarik, posisi bergerak menjauh dari kita
-                    position = isHost ? position + 2 : position - 2;
-                    updateBoard();
-                }
-            });
+            requestAnimationFrame(update);
         }
 
-        // Fungsi saat tombol ditarik
-        function pull() {
-            if (!connection || !connection.open) return;
-            
-            // Mengirim sinyal ke lawan
-            connection.send('pull');
-            
-            // Mengupdate layar sendiri (mendekat ke kita)
-            position = isHost ? position - 2 : position + 2;
-            updateBoard();
+        function gameOver() {
+            gameActive = false;
+            let finalScore = Math.floor(score/10);
+            let lb = JSON.parse(localStorage.getItem("lb")) || [];
+            lb.push(finalScore);
+            lb.sort((a,b) => b-a);
+            localStorage.setItem("lb", JSON.stringify(lb.slice(0, 5)));
+            showLeaderboard();
+            alert("Game Over! Skor kamu: " + finalScore);
         }
 
-        // Update posisi visual bola di layar
-        function updateBoard() {
-            // Batasi agar tidak lewat dari 0 atau 100
-            position = Math.max(0, Math.min(100, position));
-            rope.style.left = position + "%";
-
-            // Cek pemenang
-            if (position <= 0) {
-                endGame(isHost ? "KAMU MENANG!" : "KAMU KALAH!");
-            } else if (position >= 100) {
-                endGame(isHost ? "KAMU KALAH!" : "KAMU MENANG!");
-            }
+        function showLeaderboard() {
+            const list = document.getElementById("leaderboard");
+            list.innerHTML = "";
+            let lb = JSON.parse(localStorage.getItem("lb")) || [];
+            lb.forEach(s => list.innerHTML += `<li>${s}</li>`);
         }
 
-        function endGame(message) {
-            pullBtn.disabled = true;
-            setTimeout(() => {
-                alert(message + " - Refresh halaman untuk main lagi.");
-            }, 100);
-        }
+        window.onmousemove = (e) => { player.x = e.clientX - canvas.offsetLeft - 15; };
+        showLeaderboard();
     </script>
 </body>
 </html>
